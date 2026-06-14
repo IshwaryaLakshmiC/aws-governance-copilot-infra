@@ -65,9 +65,17 @@ resource "aws_security_group" "app" {
   }
 
   ingress {
-    description = "FastAPI app"
+    description = "Governance Copilot (port 8000)"
     from_port   = 8000
     to_port     = 8000
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  ingress {
+    description = "Discovery Copilot (port 8001)"
+    from_port   = 8001
+    to_port     = 8001
     protocol    = "tcp"
     cidr_blocks = ["0.0.0.0/0"]
   }

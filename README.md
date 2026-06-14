@@ -1,96 +1,97 @@
-# AWS Governance Copilot — Infrastructure (Terraform)
+# Cloud Security Platform — Infrastructure (Terraform)
 
-> **Terraform codebase for the AWS Security & Cost Governance Copilot** — provisions all AWS infrastructure needed to run the AI-powered governance assistant against your real AWS account.
+> **Shared AWS infrastructure for the Cloud Security Platform** — provisions all resources needed to run the AWS Governance Copilot and Security Discovery Copilot on AWS free tier.
 
-Part of the [AWS Governance Copilot](https://github.com/IshwaryaLakshmiC/aws-governance-copilot) project.  
 Built by [Ishwarya Lakshmi C](https://github.com/IshwaryaLakshmiC) · [ishwaryaaunfiltered.live](https://ishwaryaaunfiltered.live)
+
+---
+
+## Services hosted on this infrastructure
+
+| Service | Port | Description |
+|---------|------|-------------|
+| [aws-governance-copilot](https://github.com/IshwaryaLakshmiC/aws-governance-copilot) | 8000 (`:80/governance`) | AI security + cost intelligence over real AWS |
+| [security-discovery-copilot](https://github.com/IshwaryaLakshmiC/security-discovery-copilot) | 8001 (`:80/discovery`) | SE discovery, gap analysis, vendor recommendations, executive summary |
+
+Both services share: VPC, RDS (separate tables), EC2, IAM role, Bedrock access.
 
 ---
 
 ## What this provisions
 
-All resources are **free tier eligible** in `us-east-1`.
-
 | Resource | Purpose | Free tier |
 |----------|---------|-----------|
 | VPC + subnets + SGs | Network isolation | ✓ Free |
-| RDS PostgreSQL db.t3.micro + pgvector | Alert/finding store + vector search | ✓ 750hrs/month |
-| EC2 t2.micro | FastAPI app server | ✓ 750hrs/month |
-| IAM roles + policies | Least-privilege access for collectors | ✓ Free |
-| Bedrock model access | Claude Sonnet + Titan Embeddings | Pay per token (~$2/month demo usage) |
-| S3 bucket | Terraform state + collector output cache | ✓ 5GB free |
-
----
-
-## Architecture
-
-```
-                    ┌─────────────────────────────────┐
-                    │           VPC (10.0.0.0/16)      │
-                    │                                   │
-                    │  ┌──────────┐  ┌──────────────┐  │
-Internet ──────────►│  │ Public   │  │  Private     │  │
-                    │  │ Subnet   │  │  Subnet      │  │
-                    │  │          │  │              │  │
-                    │  │ EC2      │  │ RDS Postgres │  │
-                    │  │ t2.micro │──► + pgvector   │  │
-                    │  │ FastAPI  │  │              │  │
-                    │  └────┬─────┘  └──────────────┘  │
-                    └───────┼─────────────────────────--┘
-                            │
-                    ┌───────▼──────┐
-                    │ AWS Services │
-                    │ IAM, S3,     │
-                    │ GuardDuty,   │
-                    │ Cost Explorer│
-                    │ CloudTrail   │
-                    └───────┬──────┘
-                            │
-                    ┌───────▼──────┐
-                    │ AWS Bedrock  │
-                    │ Claude Sonnet│
-                    │ Titan Embed  │
-                    └──────────────┘
-```
-
----
-
-## Prerequisites
-
-1. AWS CLI configured: `aws configure`
-2. Terraform >= 1.5: `brew install terraform`
-3. AWS account with Bedrock model access enabled (see below)
-4. Free tier account recommended — estimated cost < $5/month
-
-### Enable Bedrock model access
-
-AWS Console → Bedrock → Model access → Request access for:
-- `Claude 3 Sonnet` (`anthropic.claude-3-sonnet-20240229-v1:0`)
-- `Titan Embeddings V2` (`amazon.titan-embed-text-v2:0`)
-
-Takes 2–5 minutes. Required before `terraform apply`.
+| RDS PostgreSQL 15 db.t3.micro + pgvector | Shared DB for both apps | ✓ 750hrs/month |
+| EC2 t2.micro + Nginx | App server + reverse proxy | ✓ 750hrs/month |
+| IAM roles + policies | Least-privilege for Bedrock + AWS read-only | ✓ Free |
+| S3 (state + app cache) | Terraform backend + session exports | ✓ 5GB free |
+| DynamoDB (state locks) | Terraform state locking | ✓ Free tier |
+| Bedrock (Claude Sonnet + Titan) | LLM + embeddings | ~$3-5/month demo usage |
 
 ---
 
 ## Quick start
 
 ```bash
-# Clone
-git clone https://github.com/IshwaryaLakshmiC/aws-governance-copilot-infra
-cd aws-governance-copilot-infra
+git clone https://github.com/IshwaryaLakshmiC/cloud-security-platform-infra
+cd cloud-security-platform-infra
 
-# Configure your values
-cp environments/dev/terraform.tfvars.example environments/dev/terraform.tfvars
-# Edit terraform.tfvars with your values
+# Generate SSH key
+ssh-keygen -t ed25519 -C "cloud-security-platform" -f ~/.ssh/cloud-security-platform
 
-# Deploy
+# Configure
 cd environments/dev
+cp terraform.tfvars.example terraform.tfvars
+# Edit terraform.tfvars — paste public key, set your IP, set DB password
+
+# Deploy (~10 minutes, RDS is the slow part)
 terraform init
 terraform plan
 terraform apply
 
-# Get outputs
+# Get endpoints
 terraform output
+
+# Initialise database
+cd ../..
+bash scripts/init-db.sh
+```
+
+---
+
+## After `terraform apply`
+
+```bash
+# 1. Note your EC2 IP
+terraform output ec2_public_ip
+
+# 2. SSH in
+ssh -i ~/.ssh/cloud-security-platform ec2-user@<EC2_IP>
+
+# 3. Deploy Governance Copilot
+git clone https://github.com/IshwaryaLakshmiC/aws-governance-copilot /opt/governance-copilot
+sudo systemctl enable --now governance-copilot
+
+# 4. Deploy Discovery Copilot
+git clone https://github.com/IshwaryaLakshmiC/security-discovery-copilot /opt/discovery-copilot
+sudo systemctl enable --now discovery-copilot
+
+# 5. Verify
+curl http://<EC2_IP>/health
+```
+
+---
+
+## Enable S3 backend (after first apply)
+
+```bash
+# Get the bucket name
+terraform output s3_state_bucket
+
+# Uncomment backend block in environments/dev/main.tf
+# Update bucket name with your account ID
+terraform init -migrate-state
 ```
 
 ---
@@ -99,37 +100,22 @@ terraform output
 
 ```
 modules/
-  vpc/        — VPC, subnets, internet gateway, route tables, security groups
-  rds/        — PostgreSQL RDS + pgvector extension setup
-  ec2/        — App server, key pair, elastic IP
-  iam/        — Collector roles, Bedrock access policy, instance profile
-  bedrock/    — Bedrock invocation policy, model validation
+  vpc/      — VPC, subnets, IGW, route tables, SGs (ports 22, 80, 8000, 8001)
+  rds/      — PostgreSQL 15 + pgvector, db.t3.micro, private subnet
+  ec2/      — t2.micro + EIP + Nginx reverse proxy + systemd services
+  iam/      — App role: Bedrock + AWS read-only + S3 cache access
+  s3/       — Terraform state bucket + DynamoDB locks + app cache bucket
 environments/
-  dev/        — Dev environment wiring all modules together
+  dev/      — Wires all modules, S3 backend config
 scripts/
-  init-db.sh  — Installs pgvector extension after RDS is up
-  bootstrap.sh — Full setup script: terraform apply + DB init + app deploy
+  init-db.sh — Creates all tables for both services (run once after apply)
 ```
 
 ---
 
-## After `terraform apply`
+## Architecture
 
-1. Run `scripts/init-db.sh` to install pgvector on RDS
-2. Note the EC2 public IP from `terraform output`
-3. SSH in and deploy the [aws-governance-copilot](https://github.com/IshwaryaLakshmiC/aws-governance-copilot) app
-4. Access the copilot at `http://<EC2_PUBLIC_IP>:8000`
-
----
-
-## Destroying resources
-
-```bash
-cd environments/dev
-terraform destroy
-```
-
-All resources are tagged `project=aws-governance-copilot` for easy identification.
+See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
 
 ---
 

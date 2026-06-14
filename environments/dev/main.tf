@@ -7,11 +7,13 @@ terraform {
     }
   }
 
-  # Uncomment to use S3 backend (recommended)
+  # S3 backend — enable after first apply creates the state bucket
   # backend "s3" {
-  #   bucket = "your-terraform-state-bucket"
-  #   key    = "aws-governance-copilot/dev/terraform.tfstate"
-  #   region = "us-east-1"
+  #   bucket         = "cloud-security-platform-terraform-state-<YOUR_ACCOUNT_ID>"
+  #   key            = "platform/dev/terraform.tfstate"
+  #   region         = "us-east-1"
+  #   dynamodb_table = "cloud-security-platform-terraform-locks"
+  #   encrypt        = true
   # }
 }
 
@@ -23,15 +25,26 @@ provider "aws" {
   }
 }
 
+data "aws_caller_identity" "current" {}
+
 locals {
-  project = "aws-governance-copilot"
+  project    = "cloud-security-platform"
+  account_id = data.aws_caller_identity.current.account_id
   tags = {
     Project     = local.project
     Environment = "dev"
     ManagedBy   = "terraform"
     Owner       = "ishwarya"
-    Repo        = "github.com/IshwaryaLakshmiC/aws-governance-copilot-infra"
+    Repo        = "github.com/IshwaryaLakshmiC/cloud-security-platform-infra"
   }
+}
+
+# ── S3 — Terraform state + app cache ─────────────────────────
+module "s3" {
+  source     = "../../modules/s3"
+  project    = local.project
+  account_id = local.account_id
+  tags       = local.tags
 }
 
 # ── VPC ──────────────────────────────────────────────────────
@@ -52,12 +65,12 @@ module "iam" {
   tags    = local.tags
 }
 
-# ── RDS PostgreSQL + pgvector ─────────────────────────────────
+# ── RDS PostgreSQL + pgvector (shared by both apps) ───────────
 module "rds" {
   source  = "../../modules/rds"
   project = local.project
 
-  db_name    = var.db_name
+  db_name     = var.db_name
   db_username = var.db_username
   db_password = var.db_password
 
@@ -67,7 +80,7 @@ module "rds" {
   tags = local.tags
 }
 
-# ── EC2 App Server ────────────────────────────────────────────
+# ── EC2 App Server (hosts both services) ─────────────────────
 module "ec2" {
   source  = "../../modules/ec2"
   project = local.project
@@ -77,12 +90,13 @@ module "ec2" {
   app_security_group_id = module.vpc.app_security_group_id
   instance_profile_name = module.iam.instance_profile_name
 
-  public_key  = var.public_key
-  db_host     = module.rds.db_host
-  db_port     = module.rds.db_port
-  db_name     = module.rds.db_name
-  db_username = module.rds.db_username
-  db_password = var.db_password
+  public_key      = var.public_key
+  db_host         = module.rds.db_host
+  db_port         = module.rds.db_port
+  db_name         = module.rds.db_name
+  db_username     = module.rds.db_username
+  db_password     = var.db_password
+  s3_cache_bucket = module.s3.app_cache_bucket_name
 
   tags = local.tags
 }

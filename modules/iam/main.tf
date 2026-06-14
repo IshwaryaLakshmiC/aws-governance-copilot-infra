@@ -154,8 +154,38 @@ resource "aws_iam_policy" "security_readonly" {
   tags = var.tags
 }
 
-# Attach policies to role
-resource "aws_iam_role_policy_attachment" "bedrock" {
+# S3 app cache access
+resource "aws_iam_policy" "s3_cache_access" {
+  name        = "${var.project}-s3-cache-access"
+  description = "Allow app to read/write S3 cache bucket"
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid    = "S3CacheAccess"
+        Effect = "Allow"
+        Action = [
+          "s3:GetObject",
+          "s3:PutObject",
+          "s3:DeleteObject",
+          "s3:ListBucket"
+        ]
+        Resource = [
+          "arn:aws:s3:::${var.project}-app-cache-*",
+          "arn:aws:s3:::${var.project}-app-cache-*/*"
+        ]
+      }
+    ]
+  })
+
+  tags = var.tags
+}
+
+resource "aws_iam_role_policy_attachment" "s3_cache" {
+  role       = aws_iam_role.app_role.name
+  policy_arn = aws_iam_policy.s3_cache_access.arn
+}
   role       = aws_iam_role.app_role.name
   policy_arn = aws_iam_policy.bedrock_access.arn
 }

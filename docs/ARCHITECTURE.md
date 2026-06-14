@@ -1,4 +1,4 @@
-# Architecture — AWS Governance Copilot Infrastructure
+# Architecture — Cloud Security Platform Infrastructure
 
 ## AWS Resource Architecture
 
@@ -133,7 +133,7 @@ environments/dev/main.tf
 ```
 This infra serves TWO applications:
 
-aws-governance-copilot          security-discovery-copilot
+cloud-security-platform          security-discovery-copilot
 ─────────────────────           ──────────────────────────
 findings table                  discovery_sessions table
 cost_anomalies table            gap_analysis table

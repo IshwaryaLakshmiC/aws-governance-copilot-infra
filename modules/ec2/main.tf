@@ -26,12 +26,13 @@ resource "aws_instance" "app" {
   iam_instance_profile   = var.instance_profile_name
 
   user_data = base64encode(templatefile("${path.module}/userdata.sh", {
-    db_host     = var.db_host
-    db_port     = var.db_port
-    db_name     = var.db_name
-    db_user     = var.db_username
-    db_password = var.db_password
-    aws_region  = var.region
+    db_host         = var.db_host
+    db_port         = var.db_port
+    db_name         = var.db_name
+    db_user         = var.db_username
+    db_password     = var.db_password
+    aws_region      = var.region
+    s3_cache_bucket = var.s3_cache_bucket
   }))
 
   root_block_device {
