@@ -13,9 +13,9 @@ output "ec2_ssh_command" {
   value       = module.ec2.ssh_command
 }
 
-output "database_info" {
-  description = "PostgreSQL runs locally on the EC2 instance — localhost:5432"
-  value       = "PostgreSQL 15 + pgvector installed on EC2 via userdata. Connect via SSH tunnel if needed."
+output "rds_host" {
+  description = "RDS PostgreSQL endpoint"
+  value       = module.rds.db_host
 }
 
 output "s3_state_bucket" {
